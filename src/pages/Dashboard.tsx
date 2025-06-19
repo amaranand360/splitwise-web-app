@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Users, DollarSign, TrendingUp, TrendingDown, Receipt } from 'lucide-react';
@@ -9,9 +9,28 @@ import { Group, User } from '@/types';
 import { mockGroups } from '@/services/mockData';
 
 const Dashboard = () => {
-  const [groups, setGroups] = useState<Group[]>(mockGroups);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [currentUser] = useState<User>({ id: '1', name: 'Alice Johnson', email: 'alice@example.com' });
+
+  useEffect(() => {
+    // Load groups from localStorage and merge with mock data
+    const savedGroups = localStorage.getItem('userGroups');
+    if (savedGroups) {
+      const parsedGroups = JSON.parse(savedGroups);
+      // Convert date strings back to Date objects
+      const groupsWithDates = parsedGroups.map((group: Group) => ({
+        ...group,
+        expenses: group.expenses.map(expense => ({
+          ...expense,
+          date: new Date(expense.date)
+        }))
+      }));
+      setGroups([...mockGroups, ...groupsWithDates]);
+    } else {
+      setGroups(mockGroups);
+    }
+  }, []);
 
   const handleCreateGroup = (groupData: { name: string; users: User[] }) => {
     const newGroup: Group = {
@@ -21,7 +40,14 @@ const Dashboard = () => {
       totalExpenses: 0,
       expenses: []
     };
-    setGroups(prev => [...prev, newGroup]);
+    
+    const updatedGroups = [...groups, newGroup];
+    setGroups(updatedGroups);
+    
+    // Save only the new groups (not mock data) to localStorage
+    const newGroups = updatedGroups.filter(group => !mockGroups.find(mockGroup => mockGroup.id === group.id));
+    localStorage.setItem('userGroups', JSON.stringify(newGroups));
+    
     setIsCreateModalOpen(false);
   };
 

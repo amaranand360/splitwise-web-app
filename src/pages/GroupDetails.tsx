@@ -1,13 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Plus, Users, DollarSign } from 'lucide-react';
-import { Group, Expense, Balance } from '@/types';
+import { ArrowLeft, Plus } from 'lucide-react';
+import { Group, Expense } from '@/types';
 import AddExpenseModal from '@/components/AddExpenseModal';
-import ExpenseCard from '@/components/ExpenseCard';
-import BalanceCard from '@/components/BalanceCard';
+import GroupHeader from '@/components/GroupHeader';
+import GroupSummaryCard from '@/components/GroupSummaryCard';
+import GroupMembersCard from '@/components/GroupMembersCard';
+import GroupBalancesCard from '@/components/GroupBalancesCard';
+import GroupExpensesCard from '@/components/GroupExpensesCard';
 import { mockGroups } from '@/services/mockData';
 
 const GroupDetails = () => {
@@ -17,59 +19,33 @@ const GroupDetails = () => {
   const [group, setGroup] = useState<Group | null>(null);
 
   useEffect(() => {
-    // Find the actual group data based on the groupId parameter
-    const foundGroup = mockGroups.find(g => g.id === groupId);
+    console.log('Loading group with ID:', groupId);
+    
+    // First check mock data
+    let foundGroup = mockGroups.find(g => g.id === groupId);
+    
+    // If not found in mock data, check localStorage
+    if (!foundGroup) {
+      const savedGroups = localStorage.getItem('userGroups');
+      if (savedGroups) {
+        const parsedGroups = JSON.parse(savedGroups);
+        // Convert date strings back to Date objects
+        const groupsWithDates = parsedGroups.map((group: Group) => ({
+          ...group,
+          expenses: group.expenses.map((expense: any) => ({
+            ...expense,
+            date: new Date(expense.date)
+          }))
+        }));
+        foundGroup = groupsWithDates.find((g: Group) => g.id === groupId);
+      }
+    }
+    
+    console.log('Found group:', foundGroup);
     if (foundGroup) {
       setGroup(foundGroup);
     }
   }, [groupId]);
-
-  // Calculate balances for the current group
-  const calculateBalances = (group: Group): Balance[] => {
-    const userBalances: { [userId: string]: number } = {};
-    
-    // Initialize balances
-    group.users.forEach(user => {
-      userBalances[user.id] = 0;
-    });
-
-    // Calculate what each user should pay vs what they paid
-    group.expenses.forEach(expense => {
-      // Add what the payer paid
-      userBalances[expense.paidBy] += expense.amount;
-      
-      // Subtract what each user owes
-      expense.splits.forEach(split => {
-        userBalances[split.userId] -= split.amount;
-      });
-    });
-
-    // Convert to balance format (who owes whom)
-    const balances: Balance[] = [];
-    const userIds = Object.keys(userBalances);
-    
-    for (let i = 0; i < userIds.length; i++) {
-      for (let j = 0; j < userIds.length; j++) {
-        if (i !== j) {
-          const fromUserId = userIds[i];
-          const toUserId = userIds[j];
-          
-          if (userBalances[fromUserId] < 0 && userBalances[toUserId] > 0) {
-            const amount = Math.min(Math.abs(userBalances[fromUserId]), userBalances[toUserId]);
-            if (amount > 0) {
-              balances.push({
-                fromUserId,
-                toUserId,
-                amount
-              });
-            }
-          }
-        }
-      }
-    }
-    
-    return balances;
-  };
 
   const handleAddExpense = (expenseData: Omit<Expense, 'id' | 'date'>) => {
     if (!group) return;
@@ -80,14 +56,25 @@ const GroupDetails = () => {
       date: new Date()
     };
     
-    setGroup(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        expenses: [...prev.expenses, newExpense],
-        totalExpenses: prev.totalExpenses + newExpense.amount
-      };
-    });
+    const updatedGroup = {
+      ...group,
+      expenses: [...group.expenses, newExpense],
+      totalExpenses: group.totalExpenses + newExpense.amount
+    };
+    
+    setGroup(updatedGroup);
+    
+    // Update localStorage if this is a user-created group (not in mock data)
+    if (!mockGroups.find(g => g.id === group.id)) {
+      const savedGroups = localStorage.getItem('userGroups');
+      if (savedGroups) {
+        const parsedGroups = JSON.parse(savedGroups);
+        const updatedGroups = parsedGroups.map((g: Group) => 
+          g.id === group.id ? updatedGroup : g
+        );
+        localStorage.setItem('userGroups', JSON.stringify(updatedGroups));
+      }
+    }
     
     setIsAddExpenseOpen(false);
   };
@@ -97,6 +84,7 @@ const GroupDetails = () => {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Group not found</h2>
+          <p className="text-gray-600 mb-4">The group you're looking for doesn't exist or may have been deleted.</p>
           <Button onClick={() => navigate('/')} variant="outline">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Dashboard
@@ -105,14 +93,6 @@ const GroupDetails = () => {
       </div>
     );
   }
-
-  const balances = calculateBalances(group);
-  const getGroupIcon = (name: string) => {
-    if (name.includes('🏖️') || name.toLowerCase().includes('beach')) return '🏖️';
-    if (name.includes('🏔️') || name.toLowerCase().includes('mountain')) return '🏔️';
-    if (name.includes('🍕') || name.toLowerCase().includes('lunch')) return '🍕';
-    return '👥';
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-blue-50 to-purple-50">
@@ -129,17 +109,7 @@ const GroupDetails = () => {
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Groups
               </Button>
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-blue-400 flex items-center justify-center text-2xl shadow-lg">
-                  {getGroupIcon(group.name)}
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">
-                    {group.name.replace(/[🏖️🏔️🍕👥]/g, '').trim()}
-                  </h1>
-                  <p className="text-gray-600">{group.users.length} members • ₹{group.totalExpenses.toLocaleString()} total</p>
-                </div>
-              </div>
+              <GroupHeader group={group} />
             </div>
             <Button
               onClick={() => setIsAddExpenseOpen(true)}
@@ -156,99 +126,17 @@ const GroupDetails = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Members & Summary */}
           <div className="space-y-6">
-            {/* Members Card */}
-            <Card className="bg-white/80 backdrop-blur-sm shadow-lg border-0">
-              <CardHeader className="bg-gradient-to-br from-emerald-50 to-blue-50">
-                <CardTitle className="flex items-center space-x-2 text-gray-900">
-                  <Users className="w-5 h-5 text-emerald-600" />
-                  <span>Members</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-4">
-                {group.users.map((user) => (
-                  <div key={user.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-blue-400 flex items-center justify-center text-white font-medium shadow-lg">
-                      {user.name.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{user.name}</p>
-                      <p className="text-sm text-gray-500">{user.email}</p>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Summary Card */}
-            <Card className="bg-white/80 backdrop-blur-sm shadow-lg border-0">
-              <CardHeader className="bg-gradient-to-br from-emerald-50 to-blue-50">
-                <CardTitle className="flex items-center space-x-2 text-gray-900">
-                  <DollarSign className="w-5 h-5 text-emerald-600" />
-                  <span>Summary</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-4">
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="text-gray-600">Total Expenses</span>
-                  <span className="font-semibold text-gray-900">₹{group.totalExpenses.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="text-gray-600">Per Person</span>
-                  <span className="font-semibold text-gray-900">₹{(group.totalExpenses / group.users.length).toFixed(0)}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="text-gray-600">Total Transactions</span>
-                  <span className="font-semibold text-gray-900">{group.expenses.length}</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Balances */}
-            {balances.length > 0 && (
-              <Card className="bg-white/80 backdrop-blur-sm shadow-lg border-0">
-                <CardHeader className="bg-gradient-to-br from-emerald-50 to-blue-50">
-                  <CardTitle className="text-gray-900">Balances</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 pt-4">
-                  {balances.map((balance, index) => (
-                    <BalanceCard key={index} balance={balance} users={group.users} />
-                  ))}
-                </CardContent>
-              </Card>
-            )}
+            <GroupMembersCard users={group.users} />
+            <GroupSummaryCard group={group} />
+            <GroupBalancesCard group={group} />
           </div>
 
           {/* Right Column - Expenses */}
           <div className="lg:col-span-2">
-            <Card className="bg-white/80 backdrop-blur-sm shadow-lg border-0">
-              <CardHeader className="bg-gradient-to-br from-emerald-50 to-blue-50">
-                <CardTitle className="text-gray-900">Recent Expenses</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                {group.expenses.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-100 to-blue-100 flex items-center justify-center mx-auto mb-6">
-                      <DollarSign className="w-10 h-10 text-emerald-600" />
-                    </div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">No expenses yet</h3>
-                    <p className="text-gray-600 mb-6">Add your first expense to get started tracking group spending</p>
-                    <Button
-                      onClick={() => setIsAddExpenseOpen(true)}
-                      className="bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 text-white px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add First Expense
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {group.expenses.map((expense) => (
-                      <ExpenseCard key={expense.id} expense={expense} users={group.users} />
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <GroupExpensesCard 
+              group={group} 
+              onAddExpense={() => setIsAddExpenseOpen(true)} 
+            />
           </div>
         </div>
 
