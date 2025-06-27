@@ -1,8 +1,8 @@
-# 🚀 Welcome to Your Project
+# 🚀 Welcome to the Splitwise Web App
 
-## 📌 Project Info
+A modern, responsive web application for managing group expenses and balances—built with React, Vite, and Tailwind CSS.
 
-**Live URL**: [https://lovable.dev/projects/ca0e85a6-dd1e-4e83-94f7-f93560f04b34](https://lovable.dev/projects/ca0e85a6-dd1e-4e83-94f7-f93560f04b34)
+**🔗 Live URL**: [https://splitwise-web-app.vercel.app/](https://splitwise-web-app.vercel.app/)
 
 ---
 
