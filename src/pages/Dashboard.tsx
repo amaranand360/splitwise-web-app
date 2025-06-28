@@ -14,11 +14,9 @@ const Dashboard = () => {
   const [currentUser] = useState<User>({ id: '1', name: 'Alice Johnson', email: 'alice@example.com' });
 
   useEffect(() => {
-    // Load groups from localStorage and merge with mock data
     const savedGroups = localStorage.getItem('userGroups');
     if (savedGroups) {
       const parsedGroups = JSON.parse(savedGroups);
-      // Convert date strings back to Date objects
       const groupsWithDates = parsedGroups.map((group: Group) => ({
         ...group,
         expenses: group.expenses.map(expense => ({
